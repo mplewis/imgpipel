@@ -1,5 +1,6 @@
 import {glob} from 'glob'
-import {mkdir, stat, writeFile} from 'node:fs/promises'
+import {existsSync} from 'node:fs'
+import {mkdir, stat, unlink, writeFile} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import pLimit from 'p-limit'
@@ -19,6 +20,10 @@ $.quiet = true
 
 type GlobalParams = {
   chromaSubsampling: string
+  files: {
+    deleteUnknown: boolean
+    reprocessExisting: boolean
+  }
   inDir: string
   outDir: string
   outMetadata?: string
@@ -41,6 +46,7 @@ type ProcessResult = {
   outPath: string
   outSize: string
   ratio: number
+  skipped: boolean
   target: string
 }
 
@@ -73,19 +79,20 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
     }
   }
 
-  // TODO: Don't regenerate existing files (with flag)
-  // TODO: Delete mismatched files (with flag)
-
   const bar = new ProgressBar('Processing images [:bar] :current/:total :percent :etas', {total: processJobs.length})
   const start = Date.now()
 
   const processWip = processJobs.map(async (job) => {
-    const result = await pool(() => processOne(job))
+    const result = await pool(() => processOne(params, job))
     bar.tick()
     return result
   })
   const processResults = await Promise.all(processWip)
-  console.log(`Processed ${processJobs.length} images in ${((Date.now() - start) / 1000).toFixed(1)}s`)
+  let skips = ''
+  const skipCount = processResults.filter((r) => r.skipped).length
+  if (skipCount > 0) skips = `(${skipCount} skipped) `
+  const processCount = processResults.length - skipCount
+  console.log(`Processed ${processCount} images ${skips}in ${((Date.now() - start) / 1000).toFixed(1)}s`)
 
   if (params.outMetadata) {
     const bar = new ProgressBar('Reading metadata [:bar] :current/:total :percent :etas', {total: inFiles.length})
@@ -115,33 +122,52 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
   const rows = processResults.map((s) => [s.outPath, s.outSize, `${((1 - s.ratio) * 100).toFixed(1)}%`])
   const opts = {drawHorizontalLine: (i: number) => i === 0 || (i - 1) % targets.length === 0}
   console.log(table([cols, ...rows], opts))
+
+  if (params.files.deleteUnknown) {
+    const knownFiles = new Set(processResults.map((r) => r.outPath))
+    const allFiles = new Set(await glob(path.join(params.outDir, '**', `*.{${imgExtensions.join(',')}}`)))
+    const unknownFiles = [...allFiles].filter((f) => !knownFiles.has(f))
+    if (unknownFiles.length > 0) {
+      console.log(`Deleting ${unknownFiles.length} unknown files`)
+      await Promise.all(
+        unknownFiles.map(async (file) => {
+          await unlink(file)
+          console.log(`  x ${file}`)
+        }),
+      )
+    }
+  }
 }
 
-export async function processOne(job: ProcessJob) {
-  await mkdir(path.dirname(job.outPath), {recursive: true})
+export async function processOne(params: GlobalParams, job: ProcessJob): Promise<ProcessResult> {
+  let skipped = true
+  if (params.files.reprocessExisting || !existsSync(job.outPath)) {
+    skipped = false
 
-  let resizeTo: string | undefined
-  if (job.target.maxWidth && job.target.maxHeight) {
-    resizeTo = `${job.target.maxWidth}x${job.target.maxHeight}>`
-  } else if (job.target.maxWidth) {
-    resizeTo = `${job.target.maxWidth}>`
-  } else if (job.target.maxHeight) {
-    resizeTo = `x${job.target.maxHeight}>`
-  }
-
-  await tmp.withFile(async ({path: resized}) => {
-    let toCompress = job.inPath
-    if (resizeTo) {
-      await $`magick ${job.inPath} -quality 100 -resize ${resizeTo} ${resized}`
-      toCompress = resized
+    let resizeTo: string | undefined
+    if (job.target.maxWidth && job.target.maxHeight) {
+      resizeTo = `${job.target.maxWidth}x${job.target.maxHeight}>`
+    } else if (job.target.maxWidth) {
+      resizeTo = `${job.target.maxWidth}>`
+    } else if (job.target.maxHeight) {
+      resizeTo = `x${job.target.maxHeight}>`
     }
 
-    await $`cjpegli -d ${job.target.quality} --chroma_subsampling=${job.chromaSubsampling} -p ${job.progressive} ${toCompress} ${job.outPath}`
-  })
+    await mkdir(path.dirname(job.outPath), {recursive: true})
+    await tmp.withFile(async ({path: resized}) => {
+      let toCompress = job.inPath
+      if (resizeTo) {
+        await $`magick ${job.inPath} -quality 100 -resize ${resizeTo} ${resized}`
+        toCompress = resized
+      }
 
-  await (job.preserveMetadata
-    ? $`exiftool -tagsfromfile ${job.inPath} -all:all ${job.outPath} -overwrite_original`
-    : $`exiftool -all= ${job.outPath}`)
+      await $`cjpegli -d ${job.target.quality} --chroma_subsampling=${job.chromaSubsampling} -p ${job.progressive} ${toCompress} ${job.outPath}`
+    })
+
+    await (job.preserveMetadata
+      ? $`exiftool -tagsfromfile ${job.inPath} -all:all ${job.outPath} -overwrite_original`
+      : $`exiftool -all= ${job.outPath}`)
+  }
 
   const inBytes = (await stat(job.inPath)).size
   const outBytes = (await stat(job.outPath)).size
@@ -150,6 +176,7 @@ export async function processOne(job: ProcessJob) {
     outPath: job.outPath,
     outSize: prettyBytes(outBytes),
     ratio: outBytes / inBytes,
+    skipped,
     target: job.target.name,
   }
 }

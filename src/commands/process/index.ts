@@ -24,6 +24,11 @@ const flags = {
     description: 'Jpegli chroma subsampling',
     options: ['420', '422', '440', '444'],
   }),
+  'delete-unknown': Flags.boolean({
+    default: false,
+    description:
+      'Delete files in the output directory that would not have been created by this run. DESTRUCTIVE: use with caution!',
+  }),
   'in-dir': Flags.string({
     char: 'i',
     description: 'Input directory containing files',
@@ -38,7 +43,6 @@ const flags = {
     char: 'm',
     description: 'Output file containing metadata for processed files',
   }),
-  // TODO: Preserve dates only
   'preserve-metadata': Flags.boolean({
     description:
       'By default, metadata is stripped from output images to protect your privacy when publishing online. Use this flag to preserve metadata.',
@@ -54,6 +58,11 @@ const flags = {
     default: '1.0',
     description:
       'Jpegli max butteraugli distance. Lower value = higher quality, defaults to visually lossless. If a target does not provide quality, this is used as the default.',
+  }),
+  'reprocess-existing': Flags.boolean({
+    default: false,
+    description:
+      'By default, we skip processing files if an output file exists with the same name. Set this flag to reprocess and overwrite existing files in the output directory. ',
   }),
 }
 
@@ -90,6 +99,10 @@ export default class Process extends Command {
     await processMany(
       {
         chromaSubsampling: flags['chroma-subsampling'],
+        files: {
+          deleteUnknown: flags['delete-unknown'],
+          reprocessExisting: flags['reprocess-existing'],
+        },
         inDir: flags['in-dir'],
         outDir: flags['out-dir'],
         outMetadata: flags['out-metadata'],
