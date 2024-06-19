@@ -18,12 +18,14 @@ type GlobalParams = {
   chromaSubsampling: string
   inDir: string
   outDir: string
+  progressive: string
 }
 
 type Job = {
   chromaSubsampling: string
   inPath: string
   outPath: string
+  progressive: string
   target: Target
 }
 
@@ -43,7 +45,13 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
       const ext = path.extname(outPath)
       const basename = path.basename(outPath, ext)
       outPath = path.join(path.dirname(outPath), `${basename}_${target.name}${ext}`)
-      const job: Job = {chromaSubsampling: params.chromaSubsampling, inPath, outPath, target}
+      const job: Job = {
+        chromaSubsampling: params.chromaSubsampling,
+        inPath,
+        outPath,
+        progressive: params.progressive,
+        target,
+      }
       jobs.push(job)
     }
   }
@@ -75,7 +83,7 @@ export async function processOne(job: Job) {
       toCompress = resized
     }
 
-    await $`cjpegli -d ${job.target.quality} --chroma_subsampling=${job.chromaSubsampling} -p 2 ${toCompress} ${job.outPath}`
+    await $`cjpegli -d ${job.target.quality} --chroma_subsampling=${job.chromaSubsampling} -p ${job.progressive} ${toCompress} ${job.outPath}`
   })
 
   const inBytes = (await stat(job.inPath)).size

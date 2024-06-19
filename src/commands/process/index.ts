@@ -33,6 +33,12 @@ const flags = {
     description: 'Output directory to write processed files',
     required: true,
   }),
+  progressive: Flags.string({
+    char: 'p',
+    default: '2',
+    description: 'Jpegli progressive level setting. 0 = sequential, higher value = more scans.',
+    options: ['0', '1', '2'],
+  }),
   quality: Flags.string({
     char: 'q',
     default: '1.0',
@@ -72,7 +78,12 @@ export default class Process extends Command {
     }
 
     await processMany(
-      {chromaSubsampling: flags['chroma-subsampling'], inDir: flags['in-dir'], outDir: flags['out-dir']},
+      {
+        chromaSubsampling: flags['chroma-subsampling'],
+        inDir: flags['in-dir'],
+        outDir: flags['out-dir'],
+        progressive: flags.progressive,
+      },
       targets,
     )
   }
