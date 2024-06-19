@@ -18,6 +18,7 @@ type GlobalParams = {
   chromaSubsampling: string
   inDir: string
   outDir: string
+  preserveMetadata: boolean
   progressive: string
 }
 
@@ -25,6 +26,7 @@ type Job = {
   chromaSubsampling: string
   inPath: string
   outPath: string
+  preserveMetadata: boolean
   progressive: string
   target: Target
 }
@@ -49,6 +51,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
         chromaSubsampling: params.chromaSubsampling,
         inPath,
         outPath,
+        preserveMetadata: params.preserveMetadata,
         progressive: params.progressive,
         target,
       }
@@ -85,6 +88,10 @@ export async function processOne(job: Job) {
 
     await $`cjpegli -d ${job.target.quality} --chroma_subsampling=${job.chromaSubsampling} -p ${job.progressive} ${toCompress} ${job.outPath}`
   })
+
+  await (job.preserveMetadata
+    ? $`exiftool -tagsfromfile ${job.inPath} -all:all ${job.outPath} -overwrite_original`
+    : $`exiftool -all= ${job.outPath}`)
 
   const inBytes = (await stat(job.inPath)).size
   const outBytes = (await stat(job.outPath)).size

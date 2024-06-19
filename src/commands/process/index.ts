@@ -4,6 +4,9 @@ import {stripIndents} from 'common-tags'
 import {processMany} from '../../lib/process.js'
 import {Target, parseTarget} from '../../types/target.js'
 
+// TODO
+const description = 'Process images'
+
 const args = {
   targets: Args.string({
     description: stripIndents`
@@ -13,8 +16,6 @@ const args = {
     required: true,
   }),
 }
-
-const description = 'Process images'
 
 const flags = {
   'chroma-subsampling': Flags.string({
@@ -32,6 +33,11 @@ const flags = {
     char: 'o',
     description: 'Output directory to write processed files',
     required: true,
+  }),
+  'preserve-metadata': Flags.boolean({
+    char: 'm',
+    description:
+      'By default, metadata is stripped from output images to protect your privacy when publishing online. Use this flag to preserve metadata.',
   }),
   progressive: Flags.string({
     char: 'p',
@@ -82,6 +88,7 @@ export default class Process extends Command {
         chromaSubsampling: flags['chroma-subsampling'],
         inDir: flags['in-dir'],
         outDir: flags['out-dir'],
+        preserveMetadata: flags['preserve-metadata'],
         progressive: flags.progressive,
       },
       targets,
