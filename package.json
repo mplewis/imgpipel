@@ -12,6 +12,8 @@
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-plugins": "^5",
     "common-tags": "^1.8.2",
+    "glob": "^10.4.2",
+    "p-limit": "^4",
     "zod": "^3.23.8",
     "zx": "^8.1.2"
   },

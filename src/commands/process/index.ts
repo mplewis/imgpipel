@@ -1,6 +1,7 @@
 import {Args, Command, Flags} from '@oclif/core'
 import {stripIndents} from 'common-tags'
 
+import {processMany} from '../../lib/process.js'
 import {Target, parseTarget} from '../../types/target.js'
 
 const args = {
@@ -58,7 +59,7 @@ export default class Process extends Command {
   async run(): Promise<void> {
     const {argv, flags} = await this.parse(Process)
     const defaultQuality = Number.parseFloat(flags.quality)
-    const rawTargets = (argv as string[]).map((raw) => parseTarget(raw))
+    const rawTargets = (argv as string[]).map((raw) => parseTarget(raw, defaultQuality))
     const targets: Target[] = []
     const errors: string[] = []
     for (const [index, result] of rawTargets.entries()) {
@@ -70,8 +71,9 @@ export default class Process extends Command {
       this.error(errors.join('\n'))
     }
 
-    for (const target of targets) if (!target.quality) target.quality = defaultQuality
-
-    this.log(JSON.stringify({flags, targets}, null, 2))
+    await processMany(
+      {chromaSubsampling: flags['chroma-subsampling'], inDir: flags['in-dir'], outDir: flags['out-dir']},
+      targets,
+    )
   }
 }

@@ -10,13 +10,16 @@ const targetSchema = z.object({
   maxHeight: z.coerce.number().int().optional(),
   maxWidth: z.coerce.number().int().optional(),
   name: z.string(),
-  quality: z.coerce.number().optional(),
+  quality: z.coerce.number(),
 })
 const targetRegex = /^(\w+):(\d+.\d+)?:(\d+)?:(\d+)?$/
 
 export type Target = z.infer<typeof targetSchema>
 
-export function parseTarget(raw: string): {error: string; success: false} | {success: true; target: Target} {
+export function parseTarget(
+  raw: string,
+  defaultQuality: number,
+): {error: string; success: false} | {success: true; target: Target} {
   const match = raw.match(targetRegex)
   if (!match) {
     return {
@@ -30,7 +33,7 @@ export function parseTarget(raw: string): {error: string; success: false} | {suc
     maxHeight: maxHeight || undefined,
     maxWidth: maxWidth || undefined,
     name,
-    quality: quality || undefined,
+    quality: quality || defaultQuality,
   }
   const parsed = targetSchema.safeParse(values)
   if (!parsed.success) return {error: `Invalid target \`${raw}\`: ${parsed.error.message}`, success: false}
