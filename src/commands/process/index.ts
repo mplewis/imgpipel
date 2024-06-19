@@ -34,9 +34,12 @@ const flags = {
     description: 'Output directory to write processed files',
     required: true,
   }),
+  'out-metadata': Flags.string({
+    char: 'm',
+    description: 'Output file containing metadata for processed files',
+  }),
   // TODO: Preserve dates only
   'preserve-metadata': Flags.boolean({
-    char: 'm',
     description:
       'By default, metadata is stripped from output images to protect your privacy when publishing online. Use this flag to preserve metadata.',
   }),
@@ -89,6 +92,7 @@ export default class Process extends Command {
         chromaSubsampling: flags['chroma-subsampling'],
         inDir: flags['in-dir'],
         outDir: flags['out-dir'],
+        outMetadata: flags['out-metadata'],
         preserveMetadata: flags['preserve-metadata'],
         progressive: flags.progressive,
       },

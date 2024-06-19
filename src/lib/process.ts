@@ -10,6 +10,7 @@ import * as tmp from 'tmp-promise'
 import {$} from 'zx'
 
 import {Target} from '../types/target.js'
+import {Metadata, parseExiftoolMetadata} from './metadata.ts'
 
 const imgExtensions = ['jpg', 'jpeg', 'png']
 
@@ -20,6 +21,7 @@ type GlobalParams = {
   chromaSubsampling: string
   inDir: string
   outDir: string
+  outMetadata?: string
   preserveMetadata: boolean
   progressive: string
 }
@@ -28,6 +30,7 @@ type Job = {
   chromaSubsampling: string
   inPath: string
   outPath: string
+  parseMetadata: boolean
   preserveMetadata: boolean
   progressive: string
   target: Target
@@ -53,6 +56,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
         chromaSubsampling: params.chromaSubsampling,
         inPath,
         outPath,
+        parseMetadata: Boolean(params.outMetadata),
         preserveMetadata: params.preserveMetadata,
         progressive: params.progressive,
         target,
@@ -75,6 +79,8 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
   )
   const duration = Date.now() - start
   console.log(`Processed ${jobs.length} images in ${(duration / 1000).toFixed(1)}s`)
+
+  console.log(summaries.map((s) => s.metadata))
 
   const targetNames = targets.map((t) => t.name)
   summaries.sort(
@@ -113,10 +119,26 @@ export async function processOne(job: Job) {
     ? $`exiftool -tagsfromfile ${job.inPath} -all:all ${job.outPath} -overwrite_original`
     : $`exiftool -all= ${job.outPath}`)
 
+  let metadata: Metadata | undefined
+  if (job.parseMetadata) {
+    const raw =
+      await $`exiftool -s -Make -Model -LensInfo -LensMake -LensModel -ExposureTime -FNumber -ISO -DateTimeOriginal -OffsetTimeOriginal ${job.inPath}`
+    const parseResult = parseExiftoolMetadata(raw.stdout)
+    if (!parseResult.success) {
+      // TODO: Refactor this to return errors
+      console.error(raw.stdout)
+      console.error(raw.stderr)
+      throw new Error(`${job.outPath}: ${parseResult.error}`)
+    }
+
+    metadata = parseResult.metadata
+  }
+
   const inBytes = (await stat(job.inPath)).size
   const outBytes = (await stat(job.outPath)).size
   return {
     inPath: job.inPath,
+    metadata,
     outPath: job.outPath,
     outSize: prettyBytes(outBytes),
     ratio: outBytes / inBytes,

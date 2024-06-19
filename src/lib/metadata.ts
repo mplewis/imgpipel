@@ -18,28 +18,28 @@ OffsetTimeOriginal              : -05:00
 */
 
 export type Metadata = {
-  cameraMake: string
-  cameraModel: string
-  date: Date
-  exposureTime: string
-  fNumber: string
-  iso: string
-  lensMake: string
-  lensModel: string
+  cameraMake?: string
+  cameraModel?: string
+  date?: Date
+  exposureTime?: string
+  fNumber?: string
+  iso?: string
+  lensMake?: string
+  lensModel?: string
 }
 
 const metadataRe = /^(\w+)\s*:\s(.+)$/
 const metadataSchema = z.object({
-  DateTimeOriginal: z.string(),
-  ExposureTime: z.string(),
-  FNumber: z.string(),
-  ISO: z.string(),
-  LensInfo: z.string(),
-  LensMake: z.string(),
-  LensModel: z.string(),
-  Make: z.string(),
-  Model: z.string(),
-  OffsetTimeOriginal: z.string(),
+  DateTimeOriginal: z.string().optional(),
+  ExposureTime: z.string().optional(),
+  FNumber: z.string().optional(),
+  ISO: z.string().optional(),
+  LensInfo: z.string().optional(),
+  LensMake: z.string().optional(),
+  LensModel: z.string().optional(),
+  Make: z.string().optional(),
+  Model: z.string().optional(),
+  OffsetTimeOriginal: z.string().optional(),
 })
 
 export function toDate(dto: string, oto: string): {date: Date; success: true} | {error: string; success: false} {
@@ -72,16 +72,23 @@ export function parseExiftoolMetadata(
   if (Object.keys(kv).length === 0) return {error: 'Could not parse metadata', success: false}
 
   const result = metadataSchema.safeParse(kv)
-  if (!result.success) return {error: result.error.message, success: false}
+  if (!result.success) return {error: `Failed to validate metadata: ${result.error.message}`, success: false}
   const {data} = result
 
-  const dateResult = toDate(data.DateTimeOriginal, data.OffsetTimeOriginal)
-  if (!dateResult.success) return dateResult
+  let parsedDate: Date | undefined
+  if (data.DateTimeOriginal && data.OffsetTimeOriginal) {
+    const dateResult = toDate(data.DateTimeOriginal, data.OffsetTimeOriginal)
+    if (dateResult.success) {
+      parsedDate = dateResult.date
+    } else {
+      console.warn(`Failed to parse date (${data.DateTimeOriginal}, ${data.OffsetTimeOriginal}): ${dateResult.error}`)
+    }
+  }
 
   const metadata = {
     cameraMake: data.Make,
     cameraModel: data.Model,
-    date: dateResult.date,
+    date: parsedDate,
     exposureTime: data.ExposureTime,
     fNumber: data.FNumber,
     iso: data.ISO,
