@@ -4,6 +4,8 @@ import os from 'node:os'
 import path from 'node:path'
 import pLimit from 'p-limit'
 import prettyBytes from 'pretty-bytes'
+import ProgressBar from 'progress'
+import {table} from 'table'
 import * as tmp from 'tmp-promise'
 import {$} from 'zx'
 
@@ -62,8 +64,26 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
   // TODO: Don't regenerate existing files (with flag)
   // TODO: Delete mismatched files (with flag)
 
-  // TODO: Progress bar
-  return Promise.all(jobs.map((job) => pool(() => processOne(job))))
+  const bar = new ProgressBar('Processing images [:bar] :current/:total :percent :etas', {total: jobs.length})
+  const start = Date.now()
+  const summaries = await Promise.all(
+    jobs.map(async (job) => {
+      const result = await pool(() => processOne(job))
+      bar.tick()
+      return result
+    }),
+  )
+  const duration = Date.now() - start
+  console.log(`Processed ${jobs.length} images in ${(duration / 1000).toFixed(1)}s`)
+
+  const targetNames = targets.map((t) => t.name)
+  summaries.sort(
+    (a, b) => a.inPath.localeCompare(b.inPath) || targetNames.indexOf(a.target) - targetNames.indexOf(b.target),
+  )
+  const cols = ['Output File', 'Size', 'Space Savings']
+  const rows = summaries.map((s) => [s.outPath, s.outSize, `${((1 - s.ratio) * 100).toFixed(1)}%`])
+  const opts = {drawHorizontalLine: (i: number) => i === 0 || (i - 1) % targets.length === 0}
+  console.log(table([cols, ...rows], opts))
 }
 
 export async function processOne(job: Job) {
@@ -95,6 +115,11 @@ export async function processOne(job: Job) {
 
   const inBytes = (await stat(job.inPath)).size
   const outBytes = (await stat(job.outPath)).size
-  const ratio = outBytes / inBytes
-  console.log(`${job.outPath}: ${prettyBytes(outBytes)} (${(ratio * 100).toFixed(1)}% of original)`)
+  return {
+    inPath: job.inPath,
+    outPath: job.outPath,
+    outSize: prettyBytes(outBytes),
+    ratio: outBytes / inBytes,
+    target: job.target.name,
+  }
 }

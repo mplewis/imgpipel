@@ -34,6 +34,7 @@ const flags = {
     description: 'Output directory to write processed files',
     required: true,
   }),
+  // TODO: Preserve dates only
   'preserve-metadata': Flags.boolean({
     char: 'm',
     description:
