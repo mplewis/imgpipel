@@ -1,4 +1,5 @@
 import {z} from 'zod'
+import {$} from 'zx'
 
 /*
 Example exiftool output:
@@ -96,4 +97,19 @@ export function parseExiftoolMetadata(
     lensModel: data.LensModel,
   }
   return {metadata, success: true}
+}
+
+export async function readMetadata(
+  inPath: string,
+): Promise<{error: string; success: false} | {metadata: Metadata; success: true}> {
+  const raw =
+    await $`exiftool -s -Make -Model -LensInfo -LensMake -LensModel -ExposureTime -FNumber -ISO -DateTimeOriginal -OffsetTimeOriginal ${inPath}`
+  const parseResult = parseExiftoolMetadata(raw.stdout)
+  if (!parseResult.success) {
+    console.error(raw.stdout)
+    console.error(raw.stderr)
+    return {error: `Error parsing metadata from ${inPath}: ${parseResult.error}`, success: false}
+  }
+
+  return {metadata: parseResult.metadata, success: true}
 }
