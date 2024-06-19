@@ -1,37 +1,7 @@
 import {Args, Command, Flags} from '@oclif/core'
 import {stripIndents} from 'common-tags'
-import {z} from 'zod'
 
-const targetSchema = z.object({
-  maxHeight: z.coerce.number().int().optional(),
-  maxWidth: z.coerce.number().int().optional(),
-  name: z.string(),
-  quality: z.coerce.number().optional(),
-})
-const targetRegex = /^(\w+):(\d+.\d+)?:(\d+)?:(\d+)?$/
-
-type Target = z.infer<typeof targetSchema>
-
-function parseTarget(raw: string): {error: string; success: false} | {success: true; target: Target} {
-  const match = raw.match(targetRegex)
-  if (!match) {
-    return {
-      error: `Invalid target \`${raw}\`: must match format \`name:quality:maxWidth:maxHeight\``,
-      success: false,
-    }
-  }
-
-  const [, name, quality, maxWidth, maxHeight] = match
-  const values = {
-    maxHeight: maxHeight || undefined,
-    maxWidth: maxWidth || undefined,
-    name,
-    quality: quality || undefined,
-  }
-  const parsed = targetSchema.safeParse(values)
-  if (!parsed.success) return {error: `Invalid target \`${raw}\`: ${parsed.error.message}`, success: false}
-  return {success: true, target: parsed.data}
-}
+import {Target, parseTarget} from '../../types/target.js'
 
 const args = {
   targets: Args.string({
