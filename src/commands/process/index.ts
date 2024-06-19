@@ -4,8 +4,7 @@ import {stripIndents} from 'common-tags'
 import {processMany} from '../../lib/process.js'
 import {Target, parseTarget} from '../../types/target.js'
 
-// TODO
-const description = 'Process images'
+const description = 'Process large images using an asset pipeline to optimize them for web delivery.'
 
 const args = {
   targets: Args.string({
@@ -41,7 +40,7 @@ const flags = {
   }),
   'out-metadata': Flags.string({
     char: 'm',
-    description: 'Output file containing metadata for processed files',
+    description: 'Gather camera metadata from all files and write it into a report in this JSON file',
   }),
   'preserve-metadata': Flags.boolean({
     description:
@@ -66,18 +65,21 @@ const flags = {
   }),
 }
 
-// TODO
-// const examples = [
-//   stripIndents`
-//     <%= config.bin %> <%= command.id %> friend --from oclif
-//     hello friend from oclif! (./src/commands/hello/index.ts)
-//   `,
-// ]
+const examples = [
+  stripIndents`
+    Create thumbnail images from images in ~/input and save them to ~/output:
+    <%= config.bin %> <%= command.id %> -i ~/input -o ~/output thumb::200:200
+  `,
+  stripIndents`
+    Create thumbnail, medium, and large images at varying levels of quality, and generate a JSON metadata file:
+    <%= config.bin %> <%= command.id %> -i ~/input -o ~/output -m ~/output/metadata.json thumb:2.0:200:200 medium::800:800 large:0.0:1600:1600
+  `,
+]
 
 export default class Process extends Command {
   static args = args
   static description = description
-  // static examples = examples
+  static examples = examples
   static flags = flags
   static strict = false
 
@@ -85,6 +87,7 @@ export default class Process extends Command {
     const {argv, flags} = await this.parse(Process)
     const defaultQuality = Number.parseFloat(flags.quality)
     const rawTargets = (argv as string[]).map((raw) => parseTarget(raw, defaultQuality))
+
     const targets: Target[] = []
     const errors: string[] = []
     for (const [index, result] of rawTargets.entries()) {
@@ -92,9 +95,7 @@ export default class Process extends Command {
       else errors.push(result.error)
     }
 
-    if (errors.length > 0) {
-      this.error(errors.join('\n'))
-    }
+    if (errors.length > 0) this.error(errors.join('\n'))
 
     await processMany(
       {

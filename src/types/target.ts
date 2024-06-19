@@ -14,8 +14,15 @@ const targetSchema = z.object({
 })
 const targetRegex = /^(\w+):(\d+.\d+)?:(\d+)?:(\d+)?$/
 
+/** A target image size/quality used to generate output images. */
 export type Target = z.infer<typeof targetSchema>
 
+/**
+ * Parse a string defining a target into a Target (e.g. `large:1.0:1920:1080`).
+ * @param raw The raw target string to parse
+ * @param defaultQuality The default quality to use if none is provided
+ * @returns The parsed target or an error message
+ */
 export function parseTarget(
   raw: string,
   defaultQuality: number,

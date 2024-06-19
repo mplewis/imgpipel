@@ -15,9 +15,9 @@ import {Metadata, readMetadata} from './metadata.ts'
 
 const imgExtensions = ['jpg', 'jpeg', 'png']
 
-// $.verbose = true
 $.quiet = true
 
+/** Global parameters for image processing. */
 type GlobalParams = {
   chromaSubsampling: string
   files: {
@@ -31,6 +31,7 @@ type GlobalParams = {
   progressive: string
 }
 
+/** Definition of a single processing job. */
 type ProcessJob = {
   chromaSubsampling: string
   inPath: string
@@ -41,6 +42,7 @@ type ProcessJob = {
   target: Target
 }
 
+/** The results of a processing operation. */
 type ProcessResult = {
   inPath: string
   outPath: string
@@ -50,6 +52,12 @@ type ProcessResult = {
   target: string
 }
 
+/**
+ * Process many images using one or more target output profiles.
+ * @param params Global parameters for image processing
+ * @param targets The target output profiles to process images into
+ * @returns A promise that resolves when all images have been processed
+ */
 export async function processMany(params: GlobalParams, targets: Target[]) {
   const pool = pLimit(os.cpus().length)
   const processJobs: ProcessJob[] = []
@@ -60,6 +68,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
     throw new Error(`No images found in \`${params.inDir}\``)
   }
 
+  // Gather jobs
   for (const inPath of inFiles) {
     for (const target of targets) {
       let outPath = path.join(params.outDir, path.relative(params.inDir, inPath))
@@ -79,6 +88,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
     }
   }
 
+  // Process all images
   const bar = new ProgressBar('Processing images [:bar] :current/:total :percent :etas', {total: processJobs.length})
   const start = Date.now()
 
@@ -94,6 +104,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
   const processCount = processResults.length - skipCount
   console.log(`Processed ${processCount} images ${skips}in ${((Date.now() - start) / 1000).toFixed(1)}s`)
 
+  // Build and save metadata report
   if (params.outMetadata) {
     const bar = new ProgressBar('Reading metadata [:bar] :current/:total :percent :etas', {total: inFiles.length})
     const metadataWip = inFiles.map(async (inPath) => {
@@ -114,6 +125,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
     console.log(`Saved metadata report to ${params.outMetadata}`)
   }
 
+  // Print results table
   const targetNames = targets.map((t) => t.name)
   processResults.sort(
     (a, b) => a.inPath.localeCompare(b.inPath) || targetNames.indexOf(a.target) - targetNames.indexOf(b.target),
@@ -123,6 +135,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
   const opts = {drawHorizontalLine: (i: number) => i === 0 || (i - 1) % targets.length === 0}
   console.log(table([cols, ...rows], opts))
 
+  // Delete unknown files
   if (params.files.deleteUnknown) {
     const knownFiles = new Set(processResults.map((r) => r.outPath))
     const allFiles = new Set(await glob(path.join(params.outDir, '**', `*.{${imgExtensions.join(',')}}`)))
@@ -139,6 +152,12 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
   }
 }
 
+/**
+ * Process one image using one target output profile.
+ * @param params The global parameters for image processing
+ * @param job The parameters for the job to process
+ * @returns The result of the processing operation
+ */
 export async function processOne(params: GlobalParams, job: ProcessJob): Promise<ProcessResult> {
   let skipped = true
   if (params.files.reprocessExisting || !existsSync(job.outPath)) {
@@ -181,6 +200,13 @@ export async function processOne(params: GlobalParams, job: ProcessJob): Promise
   }
 }
 
+/**
+ * Save the metadata report to a file.
+ * @param globalParams The global parameters for image processing
+ * @param processResults The results of the processing operations
+ * @param metadatas Gathered metadata from the input images
+ * @returns A promise that resolves when the metadata report is saved
+ */
 async function saveMetadataReport(
   {inDir, outDir, outMetadata}: GlobalParams,
   processResults: ProcessResult[],

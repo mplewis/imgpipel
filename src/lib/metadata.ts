@@ -18,6 +18,7 @@ DateTimeOriginal                : 2024:05:25 15:35:05
 OffsetTimeOriginal              : -05:00
 */
 
+/** Metadata gathered from an image. */
 export type Metadata = {
   cameraMake?: string
   cameraModel?: string
@@ -29,7 +30,10 @@ export type Metadata = {
   lensModel?: string
 }
 
+/** Regex to parse exiftool output lines. */
 const metadataRe = /^(\w+)\s*:\s(.+)$/
+
+/** Schema to gather metadata key/values. */
 const metadataSchema = z.object({
   DateTimeOriginal: z.string().optional(),
   ExposureTime: z.string().optional(),
@@ -43,6 +47,12 @@ const metadataSchema = z.object({
   OffsetTimeOriginal: z.string().optional(),
 })
 
+/**
+ * Convert a DateTimeOriginal and OffsetTimeOriginal to a Date.
+ * @param dto DateTimeOriginal field from EXIF data
+ * @param oto OffsetTimeOriginal field from EXIF data
+ * @returns Date if successful, error message if not
+ */
 export function toDate(dto: string, oto: string): {date: Date; success: true} | {error: string; success: false} {
   const dtoRe = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/
 
@@ -58,6 +68,11 @@ export function toDate(dto: string, oto: string): {date: Date; success: true} | 
   return {date, success: true}
 }
 
+/**
+ * Parse exiftool raw output into a Metadata object.
+ * @param raw The raw output from exiftool
+ * @returns Metadata object on success, error message otherwise
+ */
 export function parseExiftoolMetadata(
   raw: string,
 ): {error: string; success: false} | {metadata: Metadata; success: true} {
@@ -99,6 +114,11 @@ export function parseExiftoolMetadata(
   return {metadata, success: true}
 }
 
+/**
+ * Read metadata from an image file.
+ * @param inPath Path to the image file
+ * @returns Metadata on success, error message otherwise
+ */
 export async function readMetadata(
   inPath: string,
 ): Promise<{error: string; success: false} | {metadata: Metadata; success: true}> {
