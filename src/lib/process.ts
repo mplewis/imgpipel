@@ -90,7 +90,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
 
   // Process all images
   const bar = new ProgressBar('Processing images [:bar] :current/:total :percent :etas', {total: processJobs.length})
-  const start = Date.now()
+  let start = Date.now()
 
   const processWip = processJobs.map(async (job) => {
     const result = await pool(() => processOne(params, job))
@@ -106,12 +106,8 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
 
   // Build and save metadata report
   if (params.outMetadata) {
-    const bar = new ProgressBar('Reading metadata [:bar] :current/:total :percent :etas', {total: inFiles.length})
-    const metadataWip = inFiles.map(async (inPath) => {
-      const metadata = readMetadata(inPath)
-      bar.tick()
-      return metadata
-    })
+    start = Date.now()
+    const metadataWip = inFiles.map(async (inPath) => readMetadata(inPath))
     const results = await Promise.all(metadataWip)
     const metadatas: Record<string, Metadata> = {}
     for (const [i, inPath] of inFiles.entries()) {
