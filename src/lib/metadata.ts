@@ -16,6 +16,8 @@ FNumber                         : 8.0
 ISO                             : 1250
 DateTimeOriginal                : 2024:05:25 15:35:05
 OffsetTimeOriginal              : -05:00
+ImageWidth                      : 5970
+ImageHeight                     : 3980
 */
 
 /** Metadata gathered from an image. */
@@ -25,9 +27,11 @@ export type Metadata = {
   date?: Date
   exposureTime?: string
   fNumber?: string
+  height: number
   iso?: string
   lensMake?: string
   lensModel?: string
+  width: number
 }
 
 /** Regex to parse exiftool output lines. */
@@ -39,6 +43,8 @@ const metadataSchema = z.object({
   ExposureTime: z.string().optional(),
   FNumber: z.string().optional(),
   ISO: z.string().optional(),
+  ImageHeight: z.coerce.number().int(),
+  ImageWidth: z.coerce.number().int(),
   LensInfo: z.string().optional(),
   LensMake: z.string().optional(),
   LensModel: z.string().optional(),
@@ -107,9 +113,11 @@ export function parseExiftoolMetadata(
     date: parsedDate,
     exposureTime: data.ExposureTime,
     fNumber: data.FNumber,
+    height: data.ImageHeight,
     iso: data.ISO,
     lensMake: data.LensMake,
     lensModel: data.LensModel,
+    width: data.ImageWidth,
   }
   return {metadata, success: true}
 }
@@ -122,14 +130,13 @@ export function parseExiftoolMetadata(
 export async function readMetadata(
   inPath: string,
 ): Promise<{error: string; success: false} | {metadata: Metadata; success: true}> {
+  $.quiet = true
+
   const raw =
-    await $`exiftool -s -Make -Model -LensInfo -LensMake -LensModel -ExposureTime -FNumber -ISO -DateTimeOriginal -OffsetTimeOriginal ${inPath}`
+    await $`exiftool -s -DateTimeOriginal -ExposureTime -FNumber -ISO -ImageHeight -ImageWidth -LensInfo -LensMake -LensModel -Make -Model -OffsetTimeOriginal ${inPath}`
   const parseResult = parseExiftoolMetadata(raw.stdout)
-  if (!parseResult.success) {
-    console.error(raw.stdout)
-    console.error(raw.stderr)
+  if (!parseResult.success)
     return {error: `Error parsing metadata from ${inPath}: ${parseResult.error}`, success: false}
-  }
 
   return {metadata: parseResult.metadata, success: true}
 }

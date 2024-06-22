@@ -113,6 +113,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
     for (const [i, inPath] of inFiles.entries()) {
       const result = results[i]
       if (result.success) metadatas[inPath] = result.metadata
+      else console.error(`Failed to read metadata for ${inPath}: ${result.error}`)
     }
 
     console.log(`Processed metadata for ${inFiles.length} images in ${((Date.now() - start) / 1000).toFixed(1)}s`)
