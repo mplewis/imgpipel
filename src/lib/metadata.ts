@@ -4,20 +4,23 @@ import {$} from 'zx'
 /*
 Example exiftool output:
 
-exiftool -s -Make -Model -LensInfo -LensMake -LensModel -ExposureTime -FNumber -ISO -DateTimeOriginal -OffsetTimeOriginal some-file.jpg
+exiftool -s -Caption-Abstract -DateTimeOriginal -ExposureTime -FNumber -ImageHeight -ImageWidth -ISO -LensInfo -LensMake -LensModel -Make -Model -ObjectName -OffsetTimeOriginal -Sub-location some-file.jpg
 
-Make                            : FUJIFILM
-Model                           : X-T4
+Caption-Abstract                : Some longer description of this photo
+DateTimeOriginal                : 2024:05:25 15:35:05
+ExposureTime                    : 1/1000
+FNumber                         : 8.0
+ImageHeight                     : 3980
+ImageWidth                      : 5970
+ISO                             : 1250
 LensInfo                        : 27mm f/2.8
 LensMake                        : FUJIFILM
 LensModel                       : XF27mmF2.8 R WR
-ExposureTime                    : 1/1000
-FNumber                         : 8.0
-ISO                             : 1250
-DateTimeOriginal                : 2024:05:25 15:35:05
+Make                            : FUJIFILM
+Model                           : X-T4
+ObjectName                      : Some brief title for this photo
 OffsetTimeOriginal              : -05:00
-ImageWidth                      : 5970
-ImageHeight                     : 3980
+Sub-location                    : Some human-written location description
 */
 
 /** Metadata gathered from an image. */
@@ -25,20 +28,24 @@ export type Metadata = {
   cameraMake?: string
   cameraModel?: string
   date?: Date
+  description?: string
   exposureTime?: string
   fNumber?: string
   height: number
   iso?: string
   lensMake?: string
   lensModel?: string
+  location?: string
+  title?: string
   width: number
 }
 
 /** Regex to parse exiftool output lines. */
-const metadataRe = /^(\w+)\s*:\s(.+)$/
+const metadataRe = /^([\w-_\s]+)\s*:\s(.+)$/
 
-/** Schema to gather metadata key/values. */
+/** Schema to gather metadata key/values from raw exiftool output. */
 const metadataSchema = z.object({
+  CaptionAbstract: z.string().optional(),
   DateTimeOriginal: z.string().optional(),
   ExposureTime: z.string().optional(),
   FNumber: z.string().optional(),
@@ -50,7 +57,9 @@ const metadataSchema = z.object({
   LensModel: z.string().optional(),
   Make: z.string().optional(),
   Model: z.string().optional(),
+  ObjectName: z.string().optional(),
   OffsetTimeOriginal: z.string().optional(),
+  Sublocation: z.string().optional(),
 })
 
 /**
@@ -88,7 +97,8 @@ export function parseExiftoolMetadata(
     const match = line.match(metadataRe)
     if (!match) continue
     const [, key, value] = match
-    kv[key] = value
+    const k = key.replaceAll(/[ -]/g, '') // make keys consistent
+    kv[k] = value
   }
 
   if (Object.keys(kv).length === 0) return {error: 'Could not parse metadata', success: false}
@@ -111,12 +121,15 @@ export function parseExiftoolMetadata(
     cameraMake: data.Make,
     cameraModel: data.Model,
     date: parsedDate,
+    description: data.CaptionAbstract,
     exposureTime: data.ExposureTime,
     fNumber: data.FNumber,
     height: data.ImageHeight,
     iso: data.ISO,
     lensMake: data.LensMake,
     lensModel: data.LensModel,
+    location: data.Sublocation,
+    title: data.ObjectName,
     width: data.ImageWidth,
   }
   return {metadata, success: true}
@@ -133,7 +146,7 @@ export async function readMetadata(
   $.quiet = true
 
   const raw =
-    await $`exiftool -s -DateTimeOriginal -ExposureTime -FNumber -ISO -ImageHeight -ImageWidth -LensInfo -LensMake -LensModel -Make -Model -OffsetTimeOriginal ${inPath}`
+    await $`exiftool -s -Caption-Abstract -DateTimeOriginal -ExposureTime -FNumber -ImageHeight -ImageWidth -ISO -LensInfo -LensMake -LensModel -Make -Model -ObjectName -OffsetTimeOriginal -Sub-location ${inPath}`
   const parseResult = parseExiftoolMetadata(raw.stdout)
   if (!parseResult.success)
     return {error: `Error parsing metadata from ${inPath}: ${parseResult.error}`, success: false}
