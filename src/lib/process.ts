@@ -52,6 +52,12 @@ type ProcessResult = {
   target: string
 }
 
+/** The metadata report generated with details on each image. */
+type MetadataReport = {
+  original: Record<string, Metadata>
+  processed: Record<string, {height: number; original: string; width: number}>
+}
+
 /**
  * Process many images using one or more target output profiles.
  * @param params Global parameters for image processing
@@ -211,20 +217,39 @@ async function saveMetadataReport(
 ) {
   if (!outMetadata) throw new Error('No metadata destination path provided') // sanity check
 
-  const metadatasRel: Record<string, Metadata> = {}
+  const report: MetadataReport = {original: {}, processed: {}}
+
+  const original: Record<string, Metadata> = {}
   for (const [origInPath, metadata] of Object.entries(metadatas)) {
     const inPath = path.relative(inDir, origInPath)
-    metadatasRel[inPath] = metadata
+    original[inPath] = metadata
   }
 
-  const outPathToInPath: Record<string, string> = {}
-  for (const result of processResults) {
-    const outPath = path.relative(outDir, result.outPath)
-    const inPath = path.relative(inDir, result.inPath)
-    outPathToInPath[outPath] = inPath
-  }
+  report.original = original
 
-  const report = {metadata: metadatasRel, originals: outPathToInPath}
+  // HACK: We are processing this out of band, this should be happening before we print the table
+  const pool = pLimit(os.cpus().length)
+  const processedJobs = processResults.map(async (result) =>
+    pool(async () => {
+      const outPath = path.relative(outDir, result.outPath)
+      const inPath = path.relative(inDir, result.inPath)
+      const outMeta = await readMetadata(result.outPath)
+      if (!outMeta) throw new Error(`Failed to read metadata for ${result.outPath}`)
+      return {
+        metadata: {
+          height: metadatas[result.inPath].height,
+          original: inPath,
+          width: metadatas[result.inPath].width,
+        },
+        outPath,
+      }
+    }),
+  )
+  const processedResults = await Promise.all(processedJobs)
+  const processed: Record<string, {height: number; original: string; width: number}> = {}
+  for (const {metadata, outPath} of processedResults) processed[outPath] = metadata
+  report.processed = processed
+
   await mkdir(path.dirname(outMetadata), {recursive: true})
   await writeFile(outMetadata, JSON.stringify(report, null, 2))
 }
