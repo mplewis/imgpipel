@@ -1,6 +1,7 @@
+import deepmerge from 'deepmerge'
 import {glob} from 'glob'
 import {existsSync} from 'node:fs'
-import {mkdir, stat, unlink, writeFile} from 'node:fs/promises'
+import {mkdir, readFile, stat, unlink, writeFile} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import pLimit from 'p-limit'
@@ -232,7 +233,7 @@ async function saveMetadataReport(
   const original: Record<string, MetadataPlus> = {}
   for (const [origInPath, metadata] of Object.entries(metadatas)) {
     const inPath = path.relative(inDir, origInPath)
-    original[inPath] = {...metadata, description: null, location: null, title: null}
+    original[inPath] = metadata
   }
 
   report.original = original
@@ -263,6 +264,16 @@ async function saveMetadataReport(
   for (const {metadata, outPath} of processedResults) processed[outPath] = metadata
   report.processed = processed
 
+  let toWrite = report
+  try {
+    const raw = await readFile(reportPath)
+    const parsed = JSON.parse(raw.toString())
+    toWrite = deepmerge(report, parsed)
+    console.log(`Merged metadata report with existing report at ${reportPath}, preserving existing values`)
+  } catch {
+    // no existing report, ignore
+  }
+
   await mkdir(path.dirname(reportPath), {recursive: true})
-  await writeFile(reportPath, JSON.stringify(report, null, 2))
+  await writeFile(reportPath, JSON.stringify(toWrite, null, 2))
 }
