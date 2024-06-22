@@ -231,15 +231,17 @@ async function saveMetadataReport(
   const pool = pLimit(os.cpus().length)
   const processedJobs = processResults.map(async (result) =>
     pool(async () => {
+      const outMeta = await readMetadata(result.outPath)
+      if (!outMeta.success) throw new Error(`Failed to read metadata for ${result.outPath}: ${outMeta.error}`)
+
       const outPath = path.relative(outDir, result.outPath)
       const inPath = path.relative(inDir, result.inPath)
-      const outMeta = await readMetadata(result.outPath)
-      if (!outMeta) throw new Error(`Failed to read metadata for ${result.outPath}`)
+
       return {
         metadata: {
-          height: metadatas[result.inPath].height,
+          height: outMeta.metadata.height,
           original: inPath,
-          width: metadatas[result.inPath].width,
+          width: outMeta.metadata.width,
         },
         outPath,
       }
