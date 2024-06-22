@@ -25,6 +25,7 @@ type GlobalParams = {
     reprocessExisting: boolean
   }
   inDir: string
+  noTable: boolean
   outDir: string
   outMetadata?: string
   preserveMetadata: boolean
@@ -52,9 +53,11 @@ type ProcessResult = {
   target: string
 }
 
+type MetadataPlus = Metadata & Record<string, unknown>
+
 /** The metadata report generated with details on each image. */
 type MetadataReport = {
-  original: Record<string, Metadata>
+  original: Record<string, MetadataPlus>
   processed: Record<string, {height: number; original: string; width: number}>
 }
 
@@ -96,7 +99,7 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
 
   // Process all images
   const bar = new ProgressBar('Processing images [:bar] :current/:total :percent :etas', {total: processJobs.length})
-  let start = Date.now()
+  const start = Date.now()
 
   const processWip = processJobs.map(async (job) => {
     const result = await pool(() => processOne(params, job))
@@ -112,31 +115,21 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
 
   // Build and save metadata report
   if (params.outMetadata) {
-    start = Date.now()
-    const metadataWip = inFiles.map(async (inPath) => readMetadata(inPath))
-    const results = await Promise.all(metadataWip)
-    const metadatas: Record<string, Metadata> = {}
-    for (const [i, inPath] of inFiles.entries()) {
-      const result = results[i]
-      if (result.success) metadatas[inPath] = result.metadata
-      else console.error(`Failed to read metadata for ${inPath}: ${result.error}`)
-    }
-
-    console.log(`Processed metadata for ${inFiles.length} images in ${((Date.now() - start) / 1000).toFixed(1)}s`)
-
-    saveMetadataReport(params, processResults, metadatas)
+    await saveMetadataReport(params.outMetadata, params.inDir, params.outDir, inFiles, processResults)
     console.log(`Saved metadata report to ${params.outMetadata}`)
   }
 
   // Print results table
-  const targetNames = targets.map((t) => t.name)
-  processResults.sort(
-    (a, b) => a.inPath.localeCompare(b.inPath) || targetNames.indexOf(a.target) - targetNames.indexOf(b.target),
-  )
-  const cols = ['Output File', 'Size', 'Space Savings']
-  const rows = processResults.map((s) => [s.outPath, s.outSize, `${((1 - s.ratio) * 100).toFixed(1)}%`])
-  const opts = {drawHorizontalLine: (i: number) => i === 0 || (i - 1) % targets.length === 0}
-  console.log(table([cols, ...rows], opts))
+  if (!params.noTable) {
+    const targetNames = targets.map((t) => t.name)
+    processResults.sort(
+      (a, b) => a.inPath.localeCompare(b.inPath) || targetNames.indexOf(a.target) - targetNames.indexOf(b.target),
+    )
+    const cols = ['Output File', 'Size', 'Space Savings']
+    const rows = processResults.map((s) => [s.outPath, s.outSize, `${((1 - s.ratio) * 100).toFixed(1)}%`])
+    const opts = {drawHorizontalLine: (i: number) => i === 0 || (i - 1) % targets.length === 0}
+    console.log(table([cols, ...rows], opts))
+  }
 
   // Delete unknown files
   if (params.files.deleteUnknown) {
@@ -205,30 +198,46 @@ export async function processOne(params: GlobalParams, job: ProcessJob): Promise
 
 /**
  * Save the metadata report to a file.
- * @param globalParams The global parameters for image processing
- * @param processResults The results of the processing operations
- * @param metadatas Gathered metadata from the input images
+ * If an existing report is found, existing values will be preserved and new values will be merged in.
+ * @param reportPath The path to the metadata report file
+ * @param inDir The directory containing input files
+ * @param outDir The directory containing output files
+ * @param inFiles The list of input files
+ * @param processResults The results of processing the images
  * @returns A promise that resolves when the metadata report is saved
  */
 async function saveMetadataReport(
-  {inDir, outDir, outMetadata}: GlobalParams,
+  reportPath: string,
+  inDir: string,
+  outDir: string,
+  inFiles: string[],
   processResults: ProcessResult[],
-  metadatas: Record<string, Metadata>,
 ) {
-  if (!outMetadata) throw new Error('No metadata destination path provided') // sanity check
+  const pool = pLimit(os.cpus().length)
+
+  let start = Date.now()
+  const metadataWip = inFiles.map(async (inPath) => pool(() => readMetadata(inPath)))
+  const results = await Promise.all(metadataWip)
+  const metadatas: Record<string, Metadata> = {}
+  for (const [i, inPath] of inFiles.entries()) {
+    const result = results[i]
+    if (result.success) metadatas[inPath] = result.metadata
+    else console.error(`Failed to read metadata for ${inPath}: ${result.error}`)
+  }
+
+  console.log(`Read metadata for ${inFiles.length} input files in ${((Date.now() - start) / 1000).toFixed(1)}s`)
 
   const report: MetadataReport = {original: {}, processed: {}}
 
-  const original: Record<string, Metadata> = {}
+  const original: Record<string, MetadataPlus> = {}
   for (const [origInPath, metadata] of Object.entries(metadatas)) {
     const inPath = path.relative(inDir, origInPath)
-    original[inPath] = metadata
+    original[inPath] = {...metadata, description: null, location: null, title: null}
   }
 
   report.original = original
 
-  // HACK: We are processing this out of band, this should be happening before we print the table
-  const pool = pLimit(os.cpus().length)
+  start = Date.now()
   const processedJobs = processResults.map(async (result) =>
     pool(async () => {
       const outMeta = await readMetadata(result.outPath)
@@ -248,10 +257,12 @@ async function saveMetadataReport(
     }),
   )
   const processedResults = await Promise.all(processedJobs)
+  console.log(`Read metadata for ${processResults.length} output files in ${((Date.now() - start) / 1000).toFixed(1)}s`)
+
   const processed: Record<string, {height: number; original: string; width: number}> = {}
   for (const {metadata, outPath} of processedResults) processed[outPath] = metadata
   report.processed = processed
 
-  await mkdir(path.dirname(outMetadata), {recursive: true})
-  await writeFile(outMetadata, JSON.stringify(report, null, 2))
+  await mkdir(path.dirname(reportPath), {recursive: true})
+  await writeFile(reportPath, JSON.stringify(report, null, 2))
 }

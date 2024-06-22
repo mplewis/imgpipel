@@ -24,7 +24,6 @@ const flags = {
     options: ['420', '422', '440', '444'],
   }),
   'delete-unknown': Flags.boolean({
-    default: false,
     description:
       'Delete files in the output directory that would not have been created by this run. DESTRUCTIVE: use with caution!',
   }),
@@ -32,6 +31,9 @@ const flags = {
     char: 'i',
     description: 'Input directory containing files',
     required: true,
+  }),
+  'no-table': Flags.boolean({
+    description: 'Do not print the results table after processing',
   }),
   'out-dir': Flags.string({
     char: 'o',
@@ -59,7 +61,6 @@ const flags = {
       'Jpegli max butteraugli distance. Lower value = higher quality, defaults to visually lossless. If a target does not provide quality, this is used as the default.',
   }),
   'reprocess-existing': Flags.boolean({
-    default: false,
     description:
       'By default, we skip processing files if an output file exists with the same name. Set this flag to reprocess and overwrite existing files in the output directory. ',
   }),
@@ -105,6 +106,7 @@ export default class Process extends Command {
           reprocessExisting: flags['reprocess-existing'],
         },
         inDir: flags['in-dir'],
+        noTable: flags['no-table'],
         outDir: flags['out-dir'],
         outMetadata: flags['out-metadata'],
         preserveMetadata: flags['preserve-metadata'],
