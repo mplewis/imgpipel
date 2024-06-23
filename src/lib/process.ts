@@ -116,7 +116,13 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
 
   // Build and save metadata report
   if (params.outMetadata) {
-    await saveMetadataReport(params.outMetadata, params.inDir, params.outDir, inFiles, processResults)
+    await saveMetadataReport({
+      inDir: params.inDir,
+      inFiles,
+      outDir: params.outDir,
+      processResults,
+      reportPath: params.outMetadata,
+    })
     console.log(`Saved metadata report to ${params.outMetadata}`)
   }
 
@@ -207,17 +213,30 @@ export async function processOne(params: GlobalParams, job: ProcessJob): Promise
  * @param processResults The results of processing the images
  * @returns A promise that resolves when the metadata report is saved
  */
-async function saveMetadataReport(
-  reportPath: string,
-  inDir: string,
-  outDir: string,
-  inFiles: string[],
-  processResults: ProcessResult[],
-) {
+async function saveMetadataReport({
+  inDir,
+  inFiles,
+  outDir,
+  processResults,
+  reportPath,
+}: {
+  inDir: string
+  inFiles: string[]
+  outDir: string
+  processResults: ProcessResult[]
+  reportPath: string
+}) {
   const pool = pLimit(os.cpus().length)
 
+  let bar = new ProgressBar('Reading original image metadata [:bar] :current/:total :percent :etas', {
+    total: inFiles.length,
+  })
   let start = Date.now()
-  const metadataWip = inFiles.map(async (inPath) => pool(() => readMetadata(inPath)))
+  const metadataWip = inFiles.map(async (inPath) => {
+    const result = await pool(() => readMetadata(inPath))
+    bar.tick()
+    return result
+  })
   const results = await Promise.all(metadataWip)
   const metadatas: Record<string, Metadata> = {}
   for (const [i, inPath] of inFiles.entries()) {
@@ -238,6 +257,9 @@ async function saveMetadataReport(
 
   report.original = original
 
+  bar = new ProgressBar('Reading processed image metadata [:bar] :current/:total :percent :etas', {
+    total: processResults.length,
+  })
   start = Date.now()
   const processedJobs = processResults.map(async (result) =>
     pool(async () => {
@@ -247,6 +269,7 @@ async function saveMetadataReport(
       const outPath = path.relative(outDir, result.outPath)
       const inPath = path.relative(inDir, result.inPath)
 
+      bar.tick()
       return {
         metadata: {
           height: outMeta.metadata.height,
