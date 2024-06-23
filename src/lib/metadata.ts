@@ -68,7 +68,7 @@ const metadataSchema = z.object({
  * @param oto OffsetTimeOriginal field from EXIF data
  * @returns Date if successful, error message if not
  */
-export function toDate(dto: string, oto: string): {date: Date; success: true} | {error: string; success: false} {
+export function toDate(dto: string, oto: string = 'Z'): {date: Date; success: true} | {error: string; success: false} {
   const dtoRe = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/
 
   const dtoMatch = dto.match(dtoRe)
@@ -108,7 +108,7 @@ export function parseExiftoolMetadata(
   const {data} = result
 
   let parsedDate: Date | undefined
-  if (data.DateTimeOriginal && data.OffsetTimeOriginal) {
+  if (data.DateTimeOriginal) {
     const dateResult = toDate(data.DateTimeOriginal, data.OffsetTimeOriginal)
     if (dateResult.success) {
       parsedDate = dateResult.date
