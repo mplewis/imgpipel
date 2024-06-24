@@ -55,6 +55,7 @@ const metadataSchema = z.object({
   LensInfo: z.string().optional(),
   LensMake: z.string().optional(),
   LensModel: z.string().optional(),
+  Location: z.string().optional(),
   Make: z.string().optional(),
   Model: z.string().optional(),
   ObjectName: z.string().optional(),
@@ -117,6 +118,11 @@ export function parseExiftoolMetadata(
     }
   }
 
+  let location = data.Location || data.Sublocation
+  if (data.Location && data.Sublocation && data.Sublocation.length > data.Location.length) {
+    location = data.Sublocation
+  }
+
   const metadata = {
     cameraMake: data.Make,
     cameraModel: data.Model,
@@ -128,7 +134,7 @@ export function parseExiftoolMetadata(
     iso: data.ISO,
     lensMake: data.LensMake,
     lensModel: data.LensModel,
-    location: data.Sublocation,
+    location,
     title: data.ObjectName,
     width: data.ImageWidth,
   }
@@ -146,7 +152,7 @@ export async function readMetadata(
   $.quiet = true
 
   const raw =
-    await $`exiftool -s -Caption-Abstract -DateTimeOriginal -ExposureTime -FNumber -ImageHeight -ImageWidth -ISO -LensInfo -LensMake -LensModel -Make -Model -ObjectName -OffsetTimeOriginal -Sub-location ${inPath}`
+    await $`exiftool -s -Caption-Abstract -DateTimeOriginal -ExposureTime -FNumber -ImageHeight -ImageWidth -ISO -LensInfo -LensMake -LensModel -Location -Make -Model -ObjectName -OffsetTimeOriginal -Sub-location ${inPath}`
   const parseResult = parseExiftoolMetadata(raw.stdout)
   if (!parseResult.success)
     return {error: `Error parsing metadata from ${inPath}: ${parseResult.error}`, success: false}
