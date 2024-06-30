@@ -37,6 +37,7 @@ describe('parseExiftoolMetadata', () => {
       LensModel                       : XF27mmF2.8 R WR
       ExposureTime                    : 1/1000
       FNumber                         : 8.0
+      FocalLength                     : 35.8 mm (35 mm equivalent: 54.0 mm)
       ISO                             : 1250
       DateTimeOriginal                : 2024:05:25 15:35:05
       OffsetTimeOriginal              : -05:00
@@ -55,6 +56,7 @@ describe('parseExiftoolMetadata', () => {
         description: undefined,
         exposureTime: '1/1000',
         fNumber: '8.0',
+        focalLength: 35.8,
         height: 4000,
         iso: '1250',
         lensMake: 'FUJIFILM',

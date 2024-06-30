@@ -1,15 +1,34 @@
 import {z} from 'zod'
 import {$} from 'zx'
 
+/** Metadata gathered from an image. */
+export type Metadata = {
+  cameraMake?: string
+  cameraModel?: string
+  date?: Date
+  description?: string
+  exposureTime?: string
+  fNumber?: string
+  focalLength?: number
+  height: number
+  iso?: string
+  lensMake?: string
+  lensModel?: string
+  location?: string
+  title?: string
+  width: number
+}
+
 /*
 Example exiftool output:
 
-exiftool -s -Caption-Abstract -DateTimeOriginal -ExposureTime -FNumber -ImageHeight -ImageWidth -ISO -LensInfo -LensMake -LensModel -Make -Model -ObjectName -OffsetTimeOriginal -Sub-location some-file.jpg
+exiftool -s <flags> some-file.jpg
 
 Caption-Abstract                : Some longer description of this photo
 DateTimeOriginal                : 2024:05:25 15:35:05
 ExposureTime                    : 1/1000
 FNumber                         : 8.0
+FocalLength                     : 35.8 mm (35 mm equivalent: 54.0 mm)
 ImageHeight                     : 3980
 ImageWidth                      : 5970
 ISO                             : 1250
@@ -23,25 +42,28 @@ OffsetTimeOriginal              : -05:00
 Sub-location                    : Some human-written location description
 */
 
-/** Metadata gathered from an image. */
-export type Metadata = {
-  cameraMake?: string
-  cameraModel?: string
-  date?: Date
-  description?: string
-  exposureTime?: string
-  fNumber?: string
-  height: number
-  iso?: string
-  lensMake?: string
-  lensModel?: string
-  location?: string
-  title?: string
-  width: number
-}
-
 /** Regex to parse exiftool output lines. */
 const metadataRe = /^([\w-_\s]+)\s*:\s(.+)$/
+
+const etFlags = [
+  '-Caption-Abstract',
+  '-DateTimeOriginal',
+  '-ExposureTime',
+  '-FNumber',
+  '-FocalLength',
+  '-ImageHeight',
+  '-ImageWidth',
+  '-ISO',
+  '-LensInfo',
+  '-LensMake',
+  '-LensModel',
+  '-Location',
+  '-Make',
+  '-Model',
+  '-ObjectName',
+  '-OffsetTimeOriginal',
+  '-Sub-location',
+]
 
 /** Schema to gather metadata key/values from raw exiftool output. */
 const metadataSchema = z.object({
@@ -49,6 +71,7 @@ const metadataSchema = z.object({
   DateTimeOriginal: z.string().optional(),
   ExposureTime: z.string().optional(),
   FNumber: z.string().optional(),
+  FocalLength: z.string().optional(),
   ISO: z.string().optional(),
   ImageHeight: z.coerce.number().int(),
   ImageWidth: z.coerce.number().int(),
@@ -123,6 +146,12 @@ export function parseExiftoolMetadata(
     location = data.Sublocation
   }
 
+  let focalLength: number | undefined
+  if (data.FocalLength) {
+    const focalLengthMatch = data.FocalLength.match(/^([\d.]+) mm/)
+    if (focalLengthMatch) focalLength = Number.parseFloat(focalLengthMatch[1])
+  }
+
   const metadata = {
     cameraMake: data.Make,
     cameraModel: data.Model,
@@ -130,6 +159,7 @@ export function parseExiftoolMetadata(
     description: data.CaptionAbstract,
     exposureTime: data.ExposureTime,
     fNumber: data.FNumber,
+    focalLength,
     height: data.ImageHeight,
     iso: data.ISO,
     lensMake: data.LensMake,
@@ -151,8 +181,7 @@ export async function readMetadata(
 ): Promise<{error: string; success: false} | {metadata: Metadata; success: true}> {
   $.quiet = true
 
-  const raw =
-    await $`exiftool -s -Caption-Abstract -DateTimeOriginal -ExposureTime -FNumber -ImageHeight -ImageWidth -ISO -LensInfo -LensMake -LensModel -Location -Make -Model -ObjectName -OffsetTimeOriginal -Sub-location ${inPath}`
+  const raw = await $`exiftool -s ${etFlags} ${inPath}`
   const parseResult = parseExiftoolMetadata(raw.stdout)
   if (!parseResult.success)
     return {error: `Error parsing metadata from ${inPath}: ${parseResult.error}`, success: false}
