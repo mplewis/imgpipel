@@ -287,10 +287,39 @@ async function saveMetadataReport({
   for (const {metadata, outPath} of processedResults) processed[outPath] = metadata
   report.processed = processed
 
+  // List existing keys in original and processed metadata
+  const keysOrig = new Set<string>()
+  const keysProc = new Set<string>()
+  for (const key of Object.keys(report.original)) keysOrig.add(key)
+  for (const key of Object.keys(report.processed)) keysProc.add(key)
+
   let toWrite = report
   try {
     const raw = await readFile(reportPath)
     const parsed = JSON.parse(raw.toString())
+
+    const deleted: string[] = []
+
+    // Delete keys that no longer exist
+    for (const key of Object.keys(parsed.original) || []) {
+      if (!keysOrig.has(key)) {
+        deleted.push(key)
+        delete parsed.original[key]
+      }
+    }
+
+    for (const key of Object.keys(parsed.processed) || []) {
+      if (!keysProc.has(key)) {
+        deleted.push(key)
+        delete parsed.processed[key]
+      }
+    }
+
+    if (deleted.length > 0) {
+      console.warn(`Deleted ${deleted.length} keys from existing metadata report for files that no longer exist:`)
+      for (const key of deleted) console.warn(`  ${key}`)
+    }
+
     toWrite = deepmerge(report, parsed)
     console.log(`Merged metadata report with existing report at ${reportPath}, preserving existing values`)
   } catch {
