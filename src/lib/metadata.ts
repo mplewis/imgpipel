@@ -1,6 +1,9 @@
 import {z} from 'zod'
 import {$} from 'zx'
 
+/** date in local time as [year, month, day, hour, minute, second] */
+type LocalDate = readonly [number, number, number, number, number, number]
+
 /** Metadata gathered from an image. */
 export type Metadata = {
   cameraMake?: string
@@ -15,6 +18,7 @@ export type Metadata = {
   iso?: string
   lensMake?: string
   lensModel?: string
+  localDate?: LocalDate
   location?: string
   title?: string
   width: number
@@ -96,7 +100,10 @@ const metadataSchema = z.object({
  * @param oto OffsetTimeOriginal field from EXIF data
  * @returns Date if successful, error message if not
  */
-export function toDate(dto: string, oto: string = 'Z'): {date: Date; success: true} | {error: string; success: false} {
+export function toDate(
+  dto: string,
+  oto: string = 'Z',
+): {date: Date; localDate: LocalDate; success: true} | {error: string; success: false} {
   const dtoRe = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/
 
   const dtoMatch = dto.match(dtoRe)
@@ -108,7 +115,15 @@ export function toDate(dto: string, oto: string = 'Z'): {date: Date; success: tr
   const iso8601 = `${year}-${month}-${day}T${hour}:${minute}:${second}${ot}`
   const date = new Date(iso8601)
   if (Number.isNaN(date.getTime())) return {error: 'Invalid date', success: false}
-  return {date, success: true}
+  const localDate = [
+    Number.parseInt(year, 10),
+    Number.parseInt(month, 10),
+    Number.parseInt(day, 10),
+    Number.parseInt(hour, 10),
+    Number.parseInt(minute, 10),
+    Number.parseInt(second, 10),
+  ] as const
+  return {date, localDate, success: true}
 }
 
 /**
@@ -135,13 +150,15 @@ export function parseExiftoolMetadata(
   if (!result.success) return {error: `Failed to validate metadata: ${result.error.message}`, success: false}
   const {data} = result
 
-  let parsedDate: Date | undefined
+  let date: Date | undefined
+  let localDate: LocalDate | undefined
   if (data.DateTimeOriginal) {
-    const dateResult = toDate(data.DateTimeOriginal, data.OffsetTimeOriginal)
-    if (dateResult.success) {
-      parsedDate = dateResult.date
+    const r = toDate(data.DateTimeOriginal, data.OffsetTimeOriginal)
+    if (r.success) {
+      date = r.date
+      localDate = r.localDate
     } else {
-      console.warn(`Failed to parse date (${data.DateTimeOriginal}, ${data.OffsetTimeOriginal}): ${dateResult.error}`)
+      console.warn(`Error parsing date from ${data.DateTimeOriginal}, ${data.OffsetTimeOriginal}: ${r.error}`)
     }
   }
 
@@ -160,7 +177,7 @@ export function parseExiftoolMetadata(
     cameraMake: data.Make,
     cameraModel: data.Model,
     cameraProfile: data.CameraProfile,
-    date: parsedDate,
+    date,
     description: data.CaptionAbstract,
     exposureTime: data.ExposureTime,
     fNumber: data.FNumber,
@@ -169,6 +186,7 @@ export function parseExiftoolMetadata(
     iso: data.ISO,
     lensMake: data.LensMake,
     lensModel: data.LensModel,
+    localDate,
     location,
     title: data.ObjectName,
     width: data.ImageWidth,

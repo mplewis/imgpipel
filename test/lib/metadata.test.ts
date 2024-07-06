@@ -7,6 +7,7 @@ describe('toDate', () => {
   it('parses valid date values', () => {
     expect(toDate('2024:05:25 15:35:05', '-05:00')).to.deep.equal({
       date: new Date('2024-05-25T15:35:05-05:00'),
+      localDate: [2024, 5, 25, 15, 35, 5],
       success: true,
     })
   })
@@ -63,6 +64,7 @@ describe('parseExiftoolMetadata', () => {
         iso: '1250',
         lensMake: 'FUJIFILM',
         lensModel: 'XF27mmF2.8 R WR',
+        localDate: [2024, 5, 25, 15, 35, 5],
         location: 'Nauthólsvík Geothermal Beach, Reykjavík, Iceland',
         title: undefined,
         width: 6000,
