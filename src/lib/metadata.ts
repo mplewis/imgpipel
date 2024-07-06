@@ -5,6 +5,7 @@ import {$} from 'zx'
 export type Metadata = {
   cameraMake?: string
   cameraModel?: string
+  cameraProfile?: string
   date?: Date
   description?: string
   exposureTime?: string
@@ -24,6 +25,7 @@ Example exiftool output:
 
 exiftool -s <flags> some-file.jpg
 
+CameraProfile                   : Camera CLASSIC CHROME
 Caption-Abstract                : Some longer description of this photo
 DateTimeOriginal                : 2024:05:25 15:35:05
 ExposureTime                    : 1/1000
@@ -46,6 +48,7 @@ Sub-location                    : Some human-written location description
 const metadataRe = /^([\w-_\s]+)\s*:\s(.+)$/
 
 const etFlags = [
+  '-CameraProfile',
   '-Caption-Abstract',
   '-DateTimeOriginal',
   '-ExposureTime',
@@ -67,6 +70,7 @@ const etFlags = [
 
 /** Schema to gather metadata key/values from raw exiftool output. */
 const metadataSchema = z.object({
+  CameraProfile: z.string().optional(),
   CaptionAbstract: z.string().optional(),
   DateTimeOriginal: z.string().optional(),
   ExposureTime: z.string().optional(),
@@ -155,6 +159,7 @@ export function parseExiftoolMetadata(
   const metadata = {
     cameraMake: data.Make,
     cameraModel: data.Model,
+    cameraProfile: data.CameraProfile,
     date: parsedDate,
     description: data.CaptionAbstract,
     exposureTime: data.ExposureTime,

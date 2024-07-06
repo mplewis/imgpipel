@@ -41,6 +41,7 @@ describe('parseExiftoolMetadata', () => {
       ISO                             : 1250
       DateTimeOriginal                : 2024:05:25 15:35:05
       OffsetTimeOriginal              : -05:00
+      CameraProfile                   : Camera CLASSIC CHROME
       Location                        : Nauthólsvík Geothermal Beach, Reykjavík, Iceland
       Sub-location                    : Nauthólsvík Geothermal Beach,
       ImageWidth                      : 6000
@@ -52,6 +53,7 @@ describe('parseExiftoolMetadata', () => {
       metadata: {
         cameraMake: 'FUJIFILM',
         cameraModel: 'X-T4',
+        cameraProfile: 'Camera CLASSIC CHROME',
         date: new Date('2024-05-25T15:35:05-05:00'),
         description: undefined,
         exposureTime: '1/1000',
