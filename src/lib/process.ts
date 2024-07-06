@@ -189,6 +189,8 @@ export async function processOne(params: GlobalParams, job: ProcessJob): Promise
     await (job.preserveMetadata
       ? $`exiftool -tagsfromfile ${job.inPath} -all:all ${job.outPath} -overwrite_original`
       : $`exiftool -all= ${job.outPath}`)
+
+    // TODO: Rename the output files to include a content hash suffix
   }
 
   const inBytes = (await stat(job.inPath)).size
