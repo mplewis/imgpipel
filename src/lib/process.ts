@@ -62,6 +62,14 @@ type MetadataReport = {
   processed: Record<string, {height: number; original: string; width: number}>
 }
 
+async function withProgress<T>(total: number, desc: string, fn: (bar: ProgressBar) => Promise<T>): Promise<T> {
+  const start = Date.now()
+  const bar = new ProgressBar(`${desc} [:bar] :current/:total :percent :etas`, {total})
+  const retval = await fn(bar)
+  console.log(`${desc} complete in ${((Date.now() - start) / 1000).toFixed(1)}s`)
+  return retval
+}
+
 /**
  * Process many images using one or more target output profiles.
  * @param params Global parameters for image processing
@@ -78,13 +86,25 @@ export async function processMany(params: GlobalParams, targets: Target[]) {
     throw new Error(`No images found in \`${params.inDir}\``)
   }
 
+  // Hash input files
+  const inHashes = await withProgress(inFiles.length, 'Hashing input images', async (bar) =>
+    Promise.all(
+      inFiles.map(async (inPath) => {
+        const hash = (await $`sha256sum ${inPath}`).stdout.slice(0, 8)
+        bar.tick()
+        return hash
+      }),
+    ),
+  )
+
   // Gather jobs
-  for (const inPath of inFiles) {
+  for (const [i, inPath] of inFiles.entries()) {
+    const hash = inHashes[i]
     for (const target of targets) {
       let outPath = path.join(params.outDir, path.relative(params.inDir, inPath))
       const ext = path.extname(outPath)
       const basename = path.basename(outPath, ext)
-      outPath = path.join(path.dirname(outPath), `${basename}_${target.name}${ext}`)
+      outPath = path.join(path.dirname(outPath), `${basename}_${target.name}.${hash}${ext}`)
       const job: ProcessJob = {
         chromaSubsampling: params.chromaSubsampling,
         inPath,
@@ -189,8 +209,6 @@ export async function processOne(params: GlobalParams, job: ProcessJob): Promise
     await (job.preserveMetadata
       ? $`exiftool -tagsfromfile ${job.inPath} -all:all ${job.outPath} -overwrite_original`
       : $`exiftool -all= ${job.outPath}`)
-
-    // TODO: Rename the output files to include a content hash suffix
   }
 
   const inBytes = (await stat(job.inPath)).size
