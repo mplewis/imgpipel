@@ -340,7 +340,7 @@ async function saveMetadataReport({
       for (const key of deleted) console.warn(`  ${key}`)
     }
 
-    toWrite = deepmerge(report, parsed)
+    toWrite = deepmerge(report, parsed, {arrayMerge: (_dst, src) => src})
     console.log(`Merged metadata report with existing report at ${reportPath}, preserving existing values`)
   } catch {
     // no existing report, ignore
